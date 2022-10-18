@@ -37,12 +37,12 @@ pub fn file_to_words<'a>(mut file: File) -> io::Result<HashSet<String>> {
                 }
                 word_left = Some(run.to_owned());
             },
-            ScanForWordsResult::EverythingAlphanumericRun(run) => word_left = match word_left {
+            ScanForWordsResult::EverythingAlphanumericRun => word_left = match word_left {
                 Some(mut word) => {
-                    word.push_str(run);
+                    word.push_str(string_read);
                     Some(word)
                 },
-                None => Some(run.to_owned()),
+                None => Some(string_read.to_owned()),
             },
             ScanForWordsResult::NoWords => {},
         }
@@ -67,7 +67,7 @@ pub fn file_to_words<'a>(mut file: File) -> io::Result<HashSet<String>> {
 #[derive(Debug)]
 enum ScanForWordsResult<'a> {
     NoWords,
-    EverythingAlphanumericRun(&'a str),
+    EverythingAlphanumericRun,
     Words(Vec<String>),
     WordsTrailingAlphanumericRun((Vec<String>, &'a str))
 }
@@ -88,48 +88,85 @@ enum ScanForWordsResult<'a> {
 /// 
 /// If `s` is in the form of `[N](AN){m}A`, `Some(A)` is returned.
 /// Otherwise `None` is returned
+// fn scan_for_words<'a, 'b>(s: &'a str) -> ScanForWordsResult {
+//     let char_indices = s.char_indices()
+//         .map(|(i, c)| (i, c.is_alphanumeric() || c == '\''));
+    
+//     let right = char_indices.clone().skip(1);
+//     let char_pairs = char_indices.zip(right);
+//     // (i, false) means that an alphanumeric run ends at i (non-inclusive)
+//     // (i, true)  means that an alphanumeric run starts at i (inclusive)
+//     let mut break_points = char_pairs
+//         .filter(|((_, c1), (_, c2))| c1 != c2)
+//         .map(|(_, t)| t)
+//         .peekable();
+    
+//     let mut ranges: Box<dyn Iterator<Item = (usize, bool)>>;
+//     if let Some((_, starts_run)) = break_points.peek() {
+//         ranges = if !starts_run {
+//             Box::new(std::iter::once((0, true)).chain(break_points))
+//         }
+//         else {
+//             Box::new(break_points)
+//         }
+//     } else {
+//         let first_char = s.chars().next();
+//         if let Some(c) = first_char {
+//             if c.is_alphanumeric() {
+//                 return ScanForWordsResult::EverythingAlphanumericRun(s);
+//             }
+//         }
+//         return ScanForWordsResult::NoWords
+//     }
+
+//     let mut words = vec![];
+//     loop {
+//         let (break_point_1, _) = match (*ranges).next() {
+//             Some(x) => x,
+//             None => return ScanForWordsResult::Words(words),
+//         };
+//         let (break_point_2, _) = match (*ranges).next() {
+//             Some(x) => x,
+//             None => return ScanForWordsResult::WordsTrailingAlphanumericRun((words, &s[break_point_1..]))
+//         };
+//         words.push(String::from(&s[break_point_1..break_point_2]));
+//     }
+// }
+
 fn scan_for_words<'a, 'b>(s: &'a str) -> ScanForWordsResult {
-    let char_indices = s.char_indices()
-        .map(|(i, c)| (i, c.is_alphanumeric() || c == '\''));
-    
-    let right = char_indices.clone().skip(1);
-    let char_pairs = char_indices.zip(right);
-    // (i, false) means that an alphanumeric run ends at i (non-inclusive)
-    // (i, true)  means that an alphanumeric run starts at i (inclusive)
-    let mut break_points = char_pairs
-        .filter(|((_, c1), (_, c2))| c1 != c2)
-        .map(|(_, t)| t)
-        .peekable();
-    
-    let mut ranges: Box<dyn Iterator<Item = (usize, bool)>>;
-    if let Some((_, starts_run)) = break_points.peek() {
-        ranges = if !starts_run {
-            Box::new(std::iter::once((0, true)).chain(break_points))
-        }
-        else {
-            Box::new(break_points)
-        }
-    } else {
-        let first_char = s.chars().next();
-        if let Some(c) = first_char {
-            if c.is_alphanumeric() {
-                return ScanForWordsResult::EverythingAlphanumericRun(s);
-            }
-        }
+    if s.is_empty() {
         return ScanForWordsResult::NoWords
     }
+    let is_word_char = |c: char| c.is_alphanumeric() || c == '\'';
 
     let mut words = vec![];
-    loop {
-        let (break_point_1, _) = match (*ranges).next() {
-            Some(x) => x,
-            None => return ScanForWordsResult::Words(words),
-        };
-        let (break_point_2, _) = match (*ranges).next() {
-            Some(x) => x,
-            None => return ScanForWordsResult::WordsTrailingAlphanumericRun((words, &s[break_point_1..]))
-        };
-        words.push(String::from(&s[break_point_1..break_point_2]));
+
+    let mut chars = s.char_indices();
+    let mut word_start = match is_word_char(chars.next().unwrap().1) {
+        true => Some(0),
+        false => None
+    };
+
+    for (i, c) in chars {
+        match (word_start, is_word_char(c)) {
+            (Some(i_start), false) => {
+                words.push(s[i_start..i].to_owned());
+                word_start = None;
+            },
+            (None, true) => word_start = Some(i),
+            _ => {}
+        }
+    }
+
+    match word_start {
+        None => match words.is_empty() {
+            true => ScanForWordsResult::NoWords,
+            false => ScanForWordsResult::Words(words)
+        },
+        Some(i) => match i {
+            0 => ScanForWordsResult::EverythingAlphanumericRun,
+            _ => ScanForWordsResult::WordsTrailingAlphanumericRun((words, &s[i..]))
+        },
     }
 }
 
@@ -162,7 +199,6 @@ mod tests {
     impl PartialEq for ScanForWordsResult<'_> {
         fn eq(&self, other: &Self) -> bool {
             match (self, other) {
-                (Self::EverythingAlphanumericRun(l0), Self::EverythingAlphanumericRun(r0)) => l0 == r0,
                 (Self::Words(l0), Self::Words(r0)) => vec_compare(l0, r0),
                 (Self::WordsTrailingAlphanumericRun((l0, l1)), 
                     Self::WordsTrailingAlphanumericRun((r0, r1))) => vec_compare(l0, r0) && l1 == r1,
@@ -195,7 +231,7 @@ mod tests {
             },
             ScanForWordsTestCase {
                 string: "ワクワク",
-                expected_result: EverythingAlphanumericRun("ワクワク"),
+                expected_result: EverythingAlphanumericRun,
             },
             ScanForWordsTestCase {
                 string: "!,==<>",
