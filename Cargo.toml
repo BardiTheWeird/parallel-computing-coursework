@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 chashmap = "2.2.2"
+stringreader = "0.1.1"
