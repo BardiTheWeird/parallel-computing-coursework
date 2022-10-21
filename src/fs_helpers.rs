@@ -7,7 +7,10 @@ use crate::{word_filtering::reader_to_words, inverted_index::InvertedIndex};
 pub fn insert_files_into_inverted_index(files: Vec<PathBuf>, inverted_index: &mut InvertedIndex) {
     for file_path in files {
         match unique_words_in_file(&file_path) {
-            Ok(words) => inverted_index.insert(file_path, words),
+            Ok(words) => {
+                let s_path = (*file_path.to_string_lossy()).to_owned();
+                inverted_index.insert(s_path, words);
+            },
             Err(err) => error!("Error reading unique words in {:?};
             error: {}", file_path, err),
         }

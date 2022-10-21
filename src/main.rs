@@ -1,5 +1,5 @@
 use clap::{Command, Arg, ArgAction};
-use log::{info, error};
+use log::{info, error, debug};
 use parallel_computing::{inverted_index::InvertedIndex, fs_helpers, server::Server};
 
 fn main() {

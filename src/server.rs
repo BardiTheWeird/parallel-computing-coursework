@@ -40,7 +40,7 @@ impl Server {
         let response = match request {
             Request::Ping => Response::Pong,
             Request::Query(s) => Response::QueryResult(
-                vec!["just echoing".to_owned(), s]),
+                self.inverted_index.query(&s)),
             Request::QueryFile(_) => todo!(),
         };
         response.write(stream)

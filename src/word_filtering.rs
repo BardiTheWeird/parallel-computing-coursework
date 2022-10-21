@@ -18,7 +18,7 @@ pub fn reader_to_words<'a>(mut reader: impl Read) -> io::Result<HashSet<String>>
 
         let (string_read, bytes_left) = bytes_to_str(&buffer[..bytes_read])?;
 
-        match scan_for_words(string_read) {
+        match scan_for_words_from_reader(string_read) {
             ScanForWordsResult::Words(WordsWithAlphanumericRuns{
                 mut words, leading_run, trailing_run}) => 
             {
@@ -79,6 +79,36 @@ struct WordsWithAlphanumericRuns<'a> {
     trailing_run: Option<&'a str>
 }
 
+/// Scans `s` for runs of alphanumeric characters and returns them in `HashSet<String>`
+pub fn scan_for_unique_words(s: &str) -> Option<HashSet<String>> {
+    if s.is_empty() {
+        return None;
+    }
+
+    let mut words = HashSet::new();
+
+    let mut chars = s.char_indices();
+    let mut word_start = match is_word_char(chars.next().unwrap().1) {
+        true => Some(0),
+        false => None
+    };
+
+    for (i, c) in chars {
+        match (word_start, is_word_char(c)) {
+            (Some(i_start), false) => {
+                words.insert(s[i_start..i].to_owned());
+                word_start = None;
+            },
+            (None, true) => word_start = Some(i),
+            _ => {}
+        }
+    }
+    if let Some(i) = word_start {
+        words.insert(s[i..].to_owned());
+    }
+    Some(words)
+}
+
 /// Searches `s` for runs of alphanumeric characters and appends them to `words_vec`
 /// 
 /// Let `a` be an alphanumeric character.
@@ -100,12 +130,10 @@ struct WordsWithAlphanumericRuns<'a> {
 /// If `s` is of the form of `[N](AN){m}A`, `Words` is returned with trailing_run = Some(A)
 /// 
 /// If `s` is of the form of `A`, `SingleAlphanumericRun` is returned.
-fn scan_for_words<'a, 'b>(s: &'a str) -> ScanForWordsResult {
+fn scan_for_words_from_reader<'a, 'b>(s: &'a str) -> ScanForWordsResult {
     if s.is_empty() {
         return ScanForWordsResult::NoWords
     }
-    let is_word_char = |c: char| c.is_alphanumeric() || c == '\'';
-
     let mut words = vec![];
 
     let mut chars = s.char_indices();
@@ -138,6 +166,10 @@ fn scan_for_words<'a, 'b>(s: &'a str) -> ScanForWordsResult {
             } 
         })
     }
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '\''
 }
 
 /// In-place converts a UTF8 formatted string into `&str`.
@@ -272,7 +304,7 @@ mod tests {
         ];
 
         for case in test_cases {
-            let res = scan_for_words(&case.string);
+            let res = scan_for_words_from_reader(&case.string);
 
             assert_eq!(res, case.expected_result, "case `{}`:
             expected: {:?}

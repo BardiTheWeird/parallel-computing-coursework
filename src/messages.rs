@@ -3,6 +3,8 @@ use std::{io::{Read, self, Write, Error, ErrorKind}, fs::File};
 use byteorder::{WriteBytesExt, BigEndian, ReadBytesExt};
 use serde_json::json;
 
+use crate::inverted_index::QueryResult;
+
 pub struct Message {
     kind: u8,
     len: u64,
@@ -40,7 +42,7 @@ impl Message {
 
         if let Some(content) = &mut self.content {
             let mut content = content.as_bytes();
-            while content.len() > 0 {
+            while !content.is_empty() {
                 let written = stream.write(&content)?;
                 content = &content[written..];
             }
@@ -114,7 +116,7 @@ impl IntoMessage for Request {
 pub enum Response {
     Pong,
     Error(String),
-    QueryResult(Vec<String>),
+    QueryResult(Vec<QueryResult>),
     FileResult(String)
 }
 
@@ -139,7 +141,7 @@ impl FromMessage for Response {
             1 => Self::Error(requires_payload(content, "Error")?),
             2 => {
                 let content = requires_payload(content, "QueryResult")?;
-                let v = serde_json::from_str::<Vec<String>>(&content)?;
+                let v = serde_json::from_str::<Vec<QueryResult>>(&content)?;
                 Self::QueryResult(v)
             },
             3 => Self::FileResult(requires_payload(content, "FileResult")?),
