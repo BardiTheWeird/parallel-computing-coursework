@@ -11,6 +11,10 @@ fn main() {
                 .short('d')
                 .required(false)
                 .action(ArgAction::Append)
+        ).arg(
+            Arg::new("server-address")
+            .short('s')
+            .default_value("127.0.0.1:8080")
         ).get_matches();
     
     let mut inverted_index = InvertedIndex::new();
@@ -22,8 +26,11 @@ fn main() {
         info!("index constructed");
     }
 
+    let addr = matches.get_one::<String>("server-address").unwrap();
+    info!("serving at {}...", addr);
+
     let mut server = Server::new(inverted_index);
-    if let Err(err) = server.listen("127.0.0.1:8080") {
+    if let Err(err) = server.listen(addr) {
         error!("critical server error: {}", err);
     }
 }
