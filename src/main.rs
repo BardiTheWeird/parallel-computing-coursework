@@ -1,11 +1,6 @@
-mod word_filtering;
-mod inverted_index;
-mod word_stemming;
-mod fs_helpers;
-
 use clap::{Command, Arg, ArgAction};
-use inverted_index::InvertedIndex;
-use log::info;
+use log::{info, error};
+use parallel_computing::{inverted_index::InvertedIndex, fs_helpers, server::Server};
 
 fn main() {
     env_logger::init();
@@ -25,5 +20,10 @@ fn main() {
         info!("{} files found", files.len());
         fs_helpers::insert_files_into_inverted_index(files, &mut inverted_index);
         info!("index constructed");
+    }
+
+    let mut server = Server::new(inverted_index);
+    if let Err(err) = server.listen("127.0.0.1:8080") {
+        error!("critical server error: {}", err);
     }
 }
