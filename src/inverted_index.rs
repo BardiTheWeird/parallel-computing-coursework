@@ -1,4 +1,4 @@
-use std::{collections::{HashSet, HashMap}, rc::Rc};
+use std::{collections::{HashSet, HashMap}, sync::Arc};
 
 use chashmap::CHashMap;
 use log::debug;
@@ -8,7 +8,7 @@ use crate::{word_filtering::scan_for_unique_words};
 
 #[derive(Debug)]
 pub struct InvertedIndex {
-    hashmap: CHashMap<String, HashSet<Rc<String>>>
+    hashmap: CHashMap<String, HashSet<Arc<String>>>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,14 +18,14 @@ pub struct QueryResult {
 }
 
 impl InvertedIndex {
-    pub fn insert(&mut self, document: String, words: HashSet<String>) {
+    pub fn insert(&self, document: String, words: HashSet<String>) {
         let stems = Self::words_to_stems(words);
-        let document = Rc::new(document);
+        let document = Arc::new(document);
 
         let insert = ||
-            vec![Rc::clone(&document)].into_iter().collect();
-        let update = |old: &mut HashSet<Rc<String>>| {
-            old.insert(Rc::clone(&document)); };
+            vec![Arc::clone(&document)].into_iter().collect();
+        let update = |old: &mut HashSet<Arc<String>>| {
+            old.insert(Arc::clone(&document)); };
         
         for stem in stems {
             self.hashmap.upsert(stem, &insert, update);

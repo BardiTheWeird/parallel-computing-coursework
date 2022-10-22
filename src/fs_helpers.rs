@@ -1,19 +1,32 @@
-use std::{fs::File, path::{PathBuf, Path}, collections::HashSet};
+use std::{fs::File, path::{PathBuf, Path}, collections::HashSet, thread, sync::Arc};
 
 use log::error;
 
 use crate::{word_filtering::reader_to_words, inverted_index::InvertedIndex};
 
-pub fn insert_files_into_inverted_index(files: Vec<PathBuf>, inverted_index: &mut InvertedIndex) {
-    for file_path in files {
-        match unique_words_in_file(&file_path) {
-            Ok(words) => {
-                let s_path = (*file_path.to_string_lossy()).to_owned();
-                inverted_index.insert(s_path, words);
-            },
-            Err(err) => error!("Error reading unique words in {:?};
-            error: {}", file_path, err),
-        }
+pub fn insert_files_into_inverted_index(files: Arc<Vec<PathBuf>>, inverted_index: &Arc<InvertedIndex>, thread_count: usize) {
+    let mut threads = Vec::with_capacity(thread_count);
+    let segment_size = files.len()/thread_count;
+    let segments = (0..thread_count)
+        .map(|i| i*segment_size..(i+1)*segment_size);
+    for segment in segments {
+        let inverted_index = Arc::clone(inverted_index);
+        let files = Arc::clone(&files);
+        threads.push(thread::spawn(move||{
+            for file_path in &files[segment] {
+                match unique_words_in_file(&file_path) {
+                    Ok(words) => {
+                        let s_path = (*file_path.to_string_lossy()).to_owned();
+                        inverted_index.insert(s_path, words);
+                    },
+                    Err(err) => error!("Error reading unique words in {:?};
+                    error: {}", file_path, err),
+                }
+            }
+        }));
+    }
+    for thread in threads {
+        thread.join();
     }
 }
 

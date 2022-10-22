@@ -1,15 +1,15 @@
-use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration};
+use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration, sync::Arc};
 
 use log::{error};
 
 use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage}};
 
 pub struct Server {
-    inverted_index: InvertedIndex
+    inverted_index: Arc<InvertedIndex>
 }
 
 impl Server {
-    pub fn new(inverted_index: InvertedIndex) -> Self {
+    pub fn new(inverted_index: Arc<InvertedIndex>) -> Self {
         Self { inverted_index }
     }
 
