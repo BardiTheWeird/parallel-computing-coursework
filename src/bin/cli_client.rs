@@ -1,7 +1,7 @@
 use std::{net::TcpStream, io};
 
 use clap::{Command, Arg};
-use log::{info, debug};
+use log::{info};
 use parallel_computing::messages::{Request, IntoMessage, Response, FromMessage};
 
 fn main() -> io::Result<()> {

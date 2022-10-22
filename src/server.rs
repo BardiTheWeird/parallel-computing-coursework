@@ -1,8 +1,8 @@
-use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration, path::Path, fs::File};
+use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration};
 
-use log::{error, debug};
+use log::{error};
 
-use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage, MessageContent, StreamContent}};
+use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage}};
 
 pub struct Server {
     inverted_index: InvertedIndex

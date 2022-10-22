@@ -133,7 +133,7 @@ pub enum Request {
 
 impl FromMessage for Request {
     fn from_message(message: Message) -> io::Result<Self> {
-        let Message{ kind, len, content } = message;
+        let Message{ kind, len: _, content } = message;
 
         let request = match kind {
             0 => Self::Ping,
@@ -197,7 +197,7 @@ impl IntoMessage for Response {
 
 impl FromMessage for Response {
     fn from_message(message: Message) -> io::Result<Self> {
-        let Message{ kind, len, content } = message;
+        let Message{ kind, len: _, content } = message;
 
         let response =  match kind {
             0 => Self::Pong,
