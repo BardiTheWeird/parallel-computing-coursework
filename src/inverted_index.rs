@@ -4,7 +4,7 @@ use chashmap::CHashMap;
 use log::debug;
 use serde::{Serialize, Deserialize};
 
-use crate::{word_stemming::stem_words, word_filtering::scan_for_unique_words};
+use crate::{word_filtering::scan_for_unique_words};
 
 #[derive(Debug)]
 pub struct InvertedIndex {
@@ -19,7 +19,7 @@ pub struct QueryResult {
 
 impl InvertedIndex {
     pub fn insert(&mut self, document: String, words: HashSet<String>) {
-        let words = stem_words(words.into_iter());
+        let stems = Self::words_to_stems(words);
         let document = Rc::new(document);
 
         let insert = ||
@@ -27,8 +27,8 @@ impl InvertedIndex {
         let update = |old: &mut HashSet<Rc<String>>| {
             old.insert(Rc::clone(&document)); };
         
-        for word in words {
-            self.hashmap.upsert(word, &insert, update);
+        for stem in stems {
+            self.hashmap.upsert(stem, &insert, update);
         }
     }
 
@@ -39,14 +39,15 @@ impl InvertedIndex {
             None => return vec![],
         };
         debug!("words found in `{}`: {:?}", query, words);
+        let stems = Self::words_to_stems(words);
 
-        let mut v: Vec<QueryResult> = words.into_iter()
+        let mut v: Vec<QueryResult> = stems.into_iter()
             .filter_map(|s| {
                 self.hashmap.get(&s)
                     .and_then(|v| Some((*v).clone()))
             }).fold(HashMap::<String, usize>::new(), |mut accum, item| {
-                for word in item {
-                    accum.entry(word.to_string())
+                for stem in item {
+                    accum.entry(stem.to_string())
                         .and_modify(|count| *count += 1)
                         .or_insert(1);
                 }
@@ -60,5 +61,12 @@ impl InvertedIndex {
 
     pub fn new() -> Self {
         Self { hashmap: CHashMap::new() }
+    }
+
+    fn words_to_stems(words: HashSet<String>) -> HashSet<String> {
+        words.into_iter()
+            .map(|w| w.to_lowercase())
+            .map(|w| porter_stemmer::stem(&w))
+            .collect()
     }
 }

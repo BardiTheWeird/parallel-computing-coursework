@@ -185,6 +185,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
+ "porter-stemmer",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -211,6 +212,15 @@ dependencies = [
  "rand",
  "smallvec",
  "winapi",
+]
+
+[[package]]
+name = "porter-stemmer"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b79930494aea54869101ef3fb694fdb53383c0c5bcecc7d729ddad85fe0fa338"
+dependencies = [
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -387,6 +397,12 @@ name = "unicode-ident"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ceab39d59e4c9499d4e5a8ee0e2735b891bb7308ac83dfb4e80cad195c9f6f3"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fdbf052a0783de01e944a6ce7a8cb939e295b1e7be835a1112c3b9a7f047a5a"
 
 [[package]]
 name = "unsafe-libyaml"
