@@ -1,16 +1,17 @@
-use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration, sync::Arc};
+use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration, sync::{Arc, mpsc, Mutex}, thread};
 
 use log::{error};
 
 use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage}};
 
 pub struct Server {
-    inverted_index: Arc<InvertedIndex>
+    inverted_index: Arc<InvertedIndex>,
+    thread_pool: ThreadPool,
 }
 
 impl Server {
-    pub fn new(inverted_index: Arc<InvertedIndex>) -> Self {
-        Self { inverted_index }
+    pub fn new(inverted_index: Arc<InvertedIndex>, thread_count: usize) -> Self {
+        Self { inverted_index, thread_pool: ThreadPool::new(thread_count) }
     }
 
     pub fn listen(&mut self, addr: impl ToSocketAddrs) -> io::Result<()> {
@@ -18,10 +19,13 @@ impl Server {
         for stream in listeners.incoming() {
             match stream {
                 Ok(mut x) => {
-                    if let Err(err) = self.handle_stream(&mut x) {
-                        error!("Connection to {:?} ended with an error: {}", 
-                            x.peer_addr(), err);
-                    }
+                    let inverted_index = Arc::clone(&self.inverted_index);
+                    self.thread_pool.run_job(move ||{
+                        if let Err(err) = Self::handle_stream(&mut x, inverted_index) {
+                            error!("Connection to {:?} ended with an error: {}", 
+                                x.peer_addr(), err);
+                        }
+                    });
                 },
                 Err(err) => {
                     error!("{}", err);
@@ -32,7 +36,7 @@ impl Server {
         Ok(())
     }
 
-    fn handle_stream(&mut self, stream: &mut TcpStream) -> io::Result<()> {
+    fn handle_stream(stream: &mut TcpStream, inverted_index: Arc<InvertedIndex>) -> io::Result<()> {
         stream.set_read_timeout(Some(Duration::from_secs(10)))?;
         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
 
@@ -40,7 +44,7 @@ impl Server {
         let response = match request {
             Request::Ping => Response::Pong,
             Request::Query(s) => Response::QueryResult(
-                self.inverted_index.query(&s)),
+                inverted_index.query(&s)),
             Request::QueryFile(s) => {
                 match Response::from_file_path(&s) {
                     Ok(r) => r,
@@ -53,5 +57,64 @@ impl Server {
             },
         };
         response.write(stream)
+    }
+}
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: Option<mpsc::Sender<Job>>,
+}
+
+impl ThreadPool {
+    fn run_job<T>(&mut self, job: T)
+        where T: FnOnce() + Send + 'static
+    {
+        if let Some(sender) = &self.sender {
+            sender.send(Box::new(job));
+        }
+    }
+
+    fn new(thread_count: usize) -> Self {
+        let mut workers = Vec::with_capacity(thread_count);
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+
+        for id in 0..thread_count {
+            workers.push(Worker::new(Arc::clone(&receiver)));
+        }
+
+        Self { workers, sender: Some(sender) }
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in &mut self.workers {
+            if let Some(thread) = worker.thread.take() {
+                thread.join();
+            }
+        }
+    }
+}
+
+struct Worker {
+    thread: Option<thread::JoinHandle<()>>
+}
+
+impl Worker {
+    fn new(receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
+        let thread = thread::spawn(move || {
+            loop {
+                match receiver.lock().unwrap().recv() {
+                    Ok(job) => job(),
+                    Err(_) => break,
+                }
+            }
+        });
+        Self { thread: Some(thread) }
     }
 }

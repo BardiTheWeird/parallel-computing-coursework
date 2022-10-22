@@ -46,7 +46,7 @@ fn main() {
     let addr = matches.get_one::<String>("server-address").unwrap();
     info!("serving at {}...", addr);
 
-    let mut server = Server::new(inverted_index);
+    let mut server = Server::new(inverted_index, thread_count);
     if let Err(err) = server.listen(addr) {
         error!("critical server error: {}", err);
     }
