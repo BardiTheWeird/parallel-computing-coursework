@@ -8,7 +8,26 @@ use crate::inverted_index::QueryResult;
 pub struct Message {
     kind: u8,
     len: u64,
-    content: Option<String>
+    content: Option<MessageContent>
+}
+
+pub enum MessageContent {
+    String(String),
+    Stream(StreamContent)
+}
+
+pub struct StreamContent {
+    stream: Box<dyn Read>,
+    len: u64,
+}
+
+impl std::fmt::Debug for MessageContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(arg0) => f.debug_tuple("String").field(arg0).finish(),
+            Self::Stream(_) => f.debug_tuple("Stream").finish(),
+        }
+    }
 }
 
 pub trait IntoMessage {
@@ -41,10 +60,17 @@ impl Message {
         stream.write_u64::<BigEndian>(self.len)?;
 
         if let Some(content) = &mut self.content {
-            let mut content = content.as_bytes();
-            while !content.is_empty() {
-                let written = stream.write(&content)?;
-                content = &content[written..];
+            match content {
+                MessageContent::String(s) => {
+                    let mut s_bytes = s.as_bytes();
+                    while !s_bytes.is_empty() {
+                        let written = stream.write(&s_bytes)?;
+                        s_bytes = &s_bytes[written..];
+                    }
+                },
+                MessageContent::Stream(in_stream) => {
+                    io::copy(&mut in_stream.stream, stream)?;
+                },
             }
         }
 
@@ -59,7 +85,7 @@ impl Message {
             stream.read_exact(&mut buf[..])?;
             let s = String::from_utf8(buf).or(Err(Error::new(
                 ErrorKind::InvalidData, "payload is not a valid UTF8 string")))?;
-            Some(s)
+            Some(MessageContent::String(s))
         } else {
             None
         };
@@ -71,7 +97,15 @@ impl Message {
         Message { 
             kind, 
             len: s.len() as u64, 
-            content: Some(s)
+            content: Some(MessageContent::String(s))
+        }
+    }
+
+    pub fn from_stream_content(kind :u8, stream_content: StreamContent) -> Self {
+        Message {
+            kind,
+            len: stream_content.len,
+            content: Some(MessageContent::Stream(stream_content))
         }
     }
 
@@ -117,7 +151,7 @@ pub enum Response {
     Pong,
     Error(String),
     QueryResult(Vec<QueryResult>),
-    FileResult(String)
+    FileResult(MessageContent)
 }
 
 impl IntoMessage for Response {
@@ -127,7 +161,11 @@ impl IntoMessage for Response {
             Self::Error(s) => Message::from_string(1, s),
             Self::QueryResult(v) => 
                 Message::from_string(2, json!(v).to_string()),
-            Self::FileResult(s) => Message::from_string(3, s),
+            Self::FileResult(content) => match content {
+                MessageContent::String(s) => Message::from_string(3, s),
+                MessageContent::Stream(stream_content) =>
+                    Message::from_stream_content(3, stream_content),
+            },
         }
     }
 }
@@ -144,7 +182,8 @@ impl FromMessage for Response {
                 let v = serde_json::from_str::<Vec<QueryResult>>(&content)?;
                 Self::QueryResult(v)
             },
-            3 => Self::FileResult(requires_payload(content, "FileResult")?),
+            3 => Self::FileResult(MessageContent::String(
+                requires_payload(content, "FileResult")?)),
             x => return Err(Error::new(ErrorKind::InvalidInput, 
                 format!("response kind {} does not exist", x)))
         };
@@ -152,7 +191,13 @@ impl FromMessage for Response {
     }
 }
 
-fn requires_payload(content: Option<String>, message_kind: &str) -> io::Result<String> {
-    content.ok_or(Error::new(ErrorKind::InvalidInput, 
-        format!("{} requires a payload", message_kind)))
+fn requires_payload(content: Option<MessageContent>, message_kind: &str) -> io::Result<String> {
+    let content = content.ok_or(Error::new(ErrorKind::InvalidInput, 
+        format!("{} requires a payload", message_kind)))?;
+    if let MessageContent::String(s) = content {
+        Ok(s)
+    } else {
+        Err(Error::new(ErrorKind::Unsupported, 
+            format!("messages with a stream payload are not supported for reading")))
+    }
 }
