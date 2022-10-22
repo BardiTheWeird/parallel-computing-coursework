@@ -1,8 +1,8 @@
-use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration};
+use std::{net::{ToSocketAddrs, TcpListener, TcpStream}, io, time::Duration, path::Path, fs::File};
 
-use log::error;
+use log::{error, debug};
 
-use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage}};
+use crate::{inverted_index::InvertedIndex, messages::{Request, Response, FromMessage, IntoMessage, MessageContent, StreamContent}};
 
 pub struct Server {
     inverted_index: InvertedIndex
@@ -41,7 +41,16 @@ impl Server {
             Request::Ping => Response::Pong,
             Request::Query(s) => Response::QueryResult(
                 self.inverted_index.query(&s)),
-            Request::QueryFile(_) => todo!(),
+            Request::QueryFile(s) => {
+                match Response::from_file_path(&s) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("error opening file {}: {:?}", &s, err);
+                        Response::Error("Error opening file".to_owned())
+                    },
+                }
+                
+            },
         };
         response.write(stream)
     }

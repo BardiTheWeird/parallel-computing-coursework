@@ -1,4 +1,4 @@
-use std::{io::{Read, self, Write, Error, ErrorKind}, fs::File};
+use std::{io::{Read, self, Write, Error, ErrorKind}, fs::File, path::Path};
 
 use byteorder::{WriteBytesExt, BigEndian, ReadBytesExt};
 use serde_json::json;
@@ -19,6 +19,16 @@ pub enum MessageContent {
 pub struct StreamContent {
     stream: Box<dyn Read>,
     len: u64,
+}
+
+impl StreamContent {
+    fn from_file(f: File) -> io::Result<Self> {
+        let len = f.metadata()?.len();
+        Ok(StreamContent {
+            len, 
+            stream: Box::new(f)
+        })
+    }
 }
 
 impl std::fmt::Debug for MessageContent {
@@ -152,6 +162,21 @@ pub enum Response {
     Error(String),
     QueryResult(Vec<QueryResult>),
     FileResult(MessageContent)
+}
+
+impl Response {
+    pub fn from_file_path(s: &String) -> io::Result<Self> {
+        let path = Path::new(s);
+        if !path.exists() {
+            return Ok(Self::Error("file does not exist".to_owned()));
+        } else if !path.is_file() {
+            return Ok(Self::Error("path is not a file".to_owned()));
+        }
+        
+        let f = File::open(path)?;
+        let stream_content = StreamContent::from_file(f)?;
+        Ok(Self::FileResult(MessageContent::Stream(stream_content)))
+    }
 }
 
 impl IntoMessage for Response {
