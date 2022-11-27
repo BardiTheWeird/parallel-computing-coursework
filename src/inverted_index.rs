@@ -13,8 +13,8 @@ pub struct InvertedIndex {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueryResult {
-    document: String,
-    rank: usize,
+    pub document: String,
+    pub rank: usize,
 }
 
 impl InvertedIndex {

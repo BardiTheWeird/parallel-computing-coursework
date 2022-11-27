@@ -2,7 +2,7 @@ use std::{net::TcpStream, io};
 
 use clap::{Parser, ValueEnum};
 use log::{info, debug, warn, error};
-use parallel_computing::messages::{Request, IntoMessage, Response, FromMessage};
+use parallel_computing::messages::{Request, IntoMessage, Response, FromMessage, MessageContent};
 
 #[derive(Parser, Debug)]
 struct Arguments {
@@ -53,10 +53,25 @@ fn main() -> io::Result<()> {
     request.write(&mut stream)?;
 
     let response = Response::read(&mut stream)?;
-    if let Response::QueryResult(res) = response {
-        println!("{}", serde_yaml::to_string(&res).unwrap());
-    } else {
-        println!("{:?}", response);
+    match &response {
+        Response::Pong => println!("Pong!"),
+        Response::Error(err) => {
+            eprintln!("{}", err);
+            std::process::exit(1)
+        },
+        Response::QueryResult(res) => {
+            for query_res in res {
+                println!("rank: {}; document: {}", query_res.rank, query_res.document)
+            }
+        },
+        Response::FileResult(file) => {
+            if let MessageContent::String(s) = file {
+                println!("{}", s)
+            } else {
+                eprintln!("error reading a file response");
+                std::process::exit(1)
+            }
+        },
     }
 
     Ok(())
