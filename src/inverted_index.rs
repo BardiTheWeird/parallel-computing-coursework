@@ -40,6 +40,7 @@ impl InvertedIndex {
         };
         debug!("words found in `{}`: {:?}", query, words);
         let stems = Self::words_to_stems(words);
+        debug!("stems found in `{}`: {:?}", query, stems);
 
         let mut v: Vec<QueryResult> = stems.into_iter()
             .filter_map(|s| {
@@ -55,7 +56,6 @@ impl InvertedIndex {
             }).into_iter().map(|(key, rank)| QueryResult{document: key, rank})
             .collect();
         v.sort_by(|a, b| b.rank.partial_cmp(&a.rank).unwrap());
-        debug!("result for query `{}`: {:?}", query, &v);
         v
     }
 

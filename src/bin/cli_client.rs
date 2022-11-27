@@ -1,43 +1,54 @@
 use std::{net::TcpStream, io};
 
-use clap::{Command, Arg};
-use log::{info};
+use clap::{Parser, ValueEnum};
+use log::{info, debug, warn, error};
 use parallel_computing::messages::{Request, IntoMessage, Response, FromMessage};
+
+#[derive(Parser, Debug)]
+struct Arguments {
+    #[arg(short = 's', long = "server-address", default_value = "127.0.0.1:8080")]
+    server_address: String,
+
+    #[arg(short = 'r', long = "request-kind", default_value = "ping")]
+    request_kind: RequestKindCli,
+
+    #[arg(short = 'p', long = "payload")]
+    payload: Option<String>
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum RequestKindCli {
+    Ping,
+    Index,
+    File,
+}
 
 fn main() -> io::Result<()> {
     env_logger::init();
 
-    let matches = Command::new("CLI Client")
-        .arg(Arg::new("server-address")
-            .short('s')
-            .default_value("127.0.0.1:8080"))
-        .arg(Arg::new("request-kind")
-            .short('r')
-            .default_value("ping"))
-        .arg(Arg::new("query")
-            .short('q'))
-        .get_matches();
+    let arguments = Arguments::parse();
+    debug!("{:?}", arguments);
 
-    let request_kind = matches.get_one::<String>("request-kind").unwrap();
-    
-    let request = match request_kind.as_str() {
-        "ping" => Request::Ping,
-        r => {
-            let query = matches.get_one::<String>("query").unwrap();
-            info!("querying for `{}`", &query);
-            match r {
-                "index" => Request::Query(query.to_string()),
-                "file" => Request::QueryFile(query.to_string()),
-                x => return Err(io::Error::new(io::ErrorKind::InvalidInput, 
-                    format!("{} is not a request kind", x)))
+    let request = match (arguments.request_kind, arguments.payload) {
+        (RequestKindCli::Ping, x) => {
+            if x.is_some() {
+                warn!("ping request does not require a payload")
             }
+            Request::Ping
+        },
+        (RequestKindCli::Index, Some(query)) => 
+            Request::Query(query.to_string()),
+        (RequestKindCli::File, Some(filepath)) => 
+            Request::QueryFile(filepath.to_string()),
+
+        (request_kind, None) => {
+            error!("{:?} request requires a payload", request_kind);
+            std::process::exit(1);
         }
     };
 
-    let addr = matches.get_one::<String>("server-address").unwrap();
-    
-    info!("connecting to a server at {}...", addr);
-    let mut stream = TcpStream::connect(addr)?;
+    info!("connecting to a server at {}...", arguments.server_address);
+    let mut stream = TcpStream::connect(arguments.server_address)?;
     
     request.write(&mut stream)?;
 
