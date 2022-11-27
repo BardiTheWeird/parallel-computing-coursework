@@ -26,7 +26,7 @@ pub fn insert_files_into_inverted_index(files: Arc<Vec<PathBuf>>, inverted_index
         }));
     }
     for thread in threads {
-        thread.join();
+        thread.join().unwrap();
     }
 }
 

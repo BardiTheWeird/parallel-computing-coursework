@@ -72,7 +72,7 @@ impl ThreadPool {
         where T: FnOnce() + Send + 'static
     {
         if let Some(sender) = &self.sender {
-            sender.send(Box::new(job));
+            sender.send(Box::new(job)).unwrap();
         }
     }
 
@@ -81,7 +81,7 @@ impl ThreadPool {
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
 
-        for id in 0..thread_count {
+        for _ in 0..thread_count {
             workers.push(Worker::new(Arc::clone(&receiver)));
         }
 
@@ -95,7 +95,7 @@ impl Drop for ThreadPool {
 
         for worker in &mut self.workers {
             if let Some(thread) = worker.thread.take() {
-                thread.join();
+                thread.join().unwrap();
             }
         }
     }
